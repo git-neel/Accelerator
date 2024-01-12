@@ -12,6 +12,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -39,6 +40,117 @@ public class AcceleratorApplication {
             String entityName = args[0];
             generateModule(entityName);
         }
+        private List<Property> getPropertiesFromUser() {
+            Scanner scanner = new Scanner(System.in);
+            List<Property> properties = new ArrayList<>();
+            boolean entityGenerationSuccessful = false;
+
+            try {
+                System.out.println("Enter the number of properties for your entity (1-100):");
+                int attempts = 0;
+
+                while (attempts < 3) {
+                    if (scanner.hasNextInt()) {
+                        int numProperties = scanner.nextInt();
+
+                        if (numProperties < 1 || numProperties > 100) {
+                            System.err.println("Invalid input. Please provide a numeric value between 1 and 100.");
+                            attempts++;
+                        } else {
+                            // Clear the buffer to avoid infinite loop
+                            scanner.nextLine();
+
+                            for (int i = 0; i < numProperties; i++) {
+                                System.out.println("Enter the name of property " + (i + 1) + ":");
+                                String propertyName = scanner.nextLine();
+
+                                // Validate property name
+                                if (!isValidPropertyName(propertyName)) {
+                                    System.err.println("Invalid property name. Please follow Java naming conventions.");
+                                    i--; // Retry the current property
+                                    continue;
+                                }
+
+                                System.out.println("Enter the data type for property " + propertyName + ":");
+                                String dataType = getValidDataType(scanner);
+
+                                if (dataType == null) {
+                                    i--; // Retry the current property
+                                    continue;
+                                }
+
+                                properties.add(new Property(propertyName, dataType));
+                            }
+
+                            // If we reach here, properties were successfully entered
+                            entityGenerationSuccessful = true;
+                            break;
+                        }
+                    } else {
+                        System.err.println("Invalid input. Please provide a valid number.");
+                        // Clear the buffer to avoid infinite loop
+                        scanner.nextLine();
+                        attempts++;
+
+                        if (attempts == 3) {
+                            // If three unsuccessful attempts, abort the operation and stop Spring Boot
+                            System.err.println("Exceeded the maximum number of attempts. Aborting the operation.");
+                            System.exit(1);
+                        }
+                    }
+                }
+            } finally {
+                // Close the scanner to avoid resource leaks
+                scanner.close();
+            }
+
+            if (!entityGenerationSuccessful || properties.isEmpty()) {
+                // Handle the case where entity generation was not successful or no properties were entered
+                System.err.println("No properties were entered. Entity generation aborted.");
+            }
+
+            return properties;
+        }
+
+        private boolean isValidPropertyName(String propertyName) {
+            // Validate property name according to Java naming conventions
+            return propertyName.matches("^[a-z][a-zA-Z0-9]*$");
+        }
+
+
+        private String getValidDataType(Scanner scanner) {
+            System.out.println("Enter the data type for the property:");
+            int dataTypeAttempts = 0;
+
+            while (dataTypeAttempts < 3) {
+                String dataType = scanner.nextLine();
+
+                // Validate data type: Only allow Java wrapper classes
+                if (isValidDataType(dataType)) {
+                    return dataType;
+                }
+
+                System.err.println("Invalid data type. Please provide a valid Java wrapper class.");
+                dataTypeAttempts++;
+
+                if (dataTypeAttempts == 3) {
+                    // If three unsuccessful attempts, return null to indicate failure
+                    System.err.println("Exceeded the maximum number of attempts for data type. Aborting the operation.");
+                    System.exit(1);
+                }
+            }
+
+            return null;
+        }
+
+        private boolean isValidDataType(String dataType) {
+            // Add your custom validation for Java wrapper classes here
+            // For simplicity, we'll allow some common wrapper classes
+            return Set.of("Integer", "Long", "Float", "Double", "Boolean", "String", "Character").contains(dataType);
+        }
+
+
+
 
 
         private void generateModule(String entityName) {
@@ -67,6 +179,12 @@ public class AcceleratorApplication {
                     return;  // Exit the method if directory creation fails
                 }
 
+                // Generate entity package and class
+                String entityPackage = packageName + ".entity";
+                String entityContent = generateEntity(entityPackage, entityName,getPropertiesFromUser());
+                Path entityPath = Paths.get(javaSrcDir.toString(), "entity", entityName + ".java");
+                Util.writeFile(entityPath, entityContent);
+                
                 // Generate application package and class
                 String applicationContent = generateApplicationClass(packageName, entityName);
                 Path applicationPath = Paths.get(javaSrcDir.toString(), entityName+"CRUDApp.java");
@@ -79,11 +197,7 @@ public class AcceleratorApplication {
                 Path controllerPath = Paths.get(javaSrcDir.toString(), "controller", entityName + "Controller.java");
                 Util.writeFile(controllerPath, controllerContent);
 
-                // Generate entity package and class
-                String entityPackage = packageName + ".entity";
-                String entityContent = generateEntity(entityPackage, entityName);
-                Path entityPath = Paths.get(javaSrcDir.toString(), "entity", entityName + ".java");
-                Util.writeFile(entityPath, entityContent);
+
                 // Generate service package and class
                 String servicePackage = packageName + ".service";
                 String serviceContent = generateService(servicePackage, entityName);
@@ -380,48 +494,41 @@ public class AcceleratorApplication {
                 }
                 """.formatted(packageName, entityName, entityName, entityName, entityName);
         }
-        private String generateEntity(String packageName, String entityName) {
-            return """
-            package %s;
+        private String generateEntity(String packageName, String entityName, List<Property> properties) {
+            StringBuilder entityContent = new StringBuilder();
+            entityContent.append("package ").append(packageName).append(";\n\n");
+            entityContent.append("import javax.persistence.Entity;\n");
+            entityContent.append("import javax.persistence.GeneratedValue;\n");
+            entityContent.append("import javax.persistence.GenerationType;\n");
+            entityContent.append("import javax.persistence.Id;\n\n");
 
-            import javax.persistence.Entity;
-            import javax.persistence.GeneratedValue;
-            import javax.persistence.GenerationType;
-            import javax.persistence.Id;
+            entityContent.append("@Entity\n");
+            entityContent.append("public class ").append(entityName).append(" {\n\n");
 
-            /**
-             * Entity class for %s.
-             */
-            @Entity
-            public class %s {
-
-                @Id
-                @GeneratedValue(strategy = GenerationType.IDENTITY)
-                private Long id;
-
-                // Add fields corresponding to your entity properties
-                // Example:
-                // private String name;
-                // private int age;
-
-                // Add getters and setters for your fields
-                // Example:
-                // public String getName() {
-                //     return name;
-                // }
-                //
-                // public void setName(String name) {
-                //     this.name = name;
-                // }
-
-                // Add toString() method for better logging and debugging
-
-                // Customize equals() and hashCode() methods if needed
-
-                // Add additional business logic if needed
+            // Generate fields based on user-provided properties
+            for (Property property : properties) {
+                entityContent.append("    private ").append(property.dataType()).append(" ").append(property.name()).append(";\n");
             }
-            """.formatted(packageName, entityName, entityName);
+
+            // Generate getters and setters based on user-provided properties
+            for (Property property : properties) {
+                entityContent.append("\n    public ").append(property.dataType()).append(" get").append(property.name()).append("() {\n");
+                entityContent.append("        return ").append(property.name()).append(";\n");
+                entityContent.append("    }\n\n");
+
+                entityContent.append("    public void set").append(property.name()).append("(").append(property.dataType()).append(" ").append(property.name()).append(") {\n");
+                entityContent.append("        this.").append(property.name()).append(" = ").append(property.name()).append(";\n");
+                entityContent.append("    }\n\n");
+            }
+
+            // Add additional methods if needed
+
+            entityContent.append("}\n");
+
+            return entityContent.toString();
         }
+
+
         private void deleteEntityModuleDirectory(String entityName) {
             String entityModulePath = String.format(BASE_PATH, entityName);
             File entityModuleDirectory = Paths.get(entityModulePath).toFile();
@@ -493,6 +600,8 @@ public class AcceleratorApplication {
 
     }
 
+    public record Property(String name, String dataType) {
+    }
 
 
 }
