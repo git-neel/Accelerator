@@ -119,7 +119,6 @@ public class AcceleratorApplication {
 
 
         private String getValidDataType(Scanner scanner) {
-            System.out.println("Enter the data type for the property:");
             int dataTypeAttempts = 0;
 
             while (dataTypeAttempts < 3) {
@@ -227,6 +226,24 @@ public class AcceleratorApplication {
                 Path pomFilePath = Paths.get(modulePath, "pom.xml");
                 Util.writeFile(pomFilePath, pomFileContent);
 
+                // Generate src/main/java/config folder
+                String configPackage = packageName + ".config";
+                Path config = Paths.get(javaSrcDir.toString(), "config");
+                String configPath = config.toString();
+                File configDir = config.toFile();
+                if (configDir.mkdirs()) {
+                    System.out.println("src/main/java/config directory created successfully.");
+                } else {
+                    System.err.println("Failed to create src/main/java/config directory.");
+                    return;  // Exit the method if directory creation fails
+                }
+
+                // Generate SwaggerConfig class
+                String swaggerConfigContent = generateSwaggerConfig(configPackage, entityName);
+                Path swaggerConfigPath = Paths.get(configPath, "SwaggerConfig.java");
+                Util.writeFile(swaggerConfigPath, swaggerConfigContent);
+
+
                 // Zip the directory
                 Util.zipDirectory(moduleDirectory, modulePath + ".zip");
 
@@ -248,8 +265,10 @@ public class AcceleratorApplication {
 
         import org.springframework.boot.SpringApplication;
         import org.springframework.boot.autoconfigure.SpringBootApplication;
+        import springfox.documentation.swagger2.annotations.EnableSwagger2;
 
         @SpringBootApplication
+        @EnableSwagger2
         class %sEntityCRUDApp {
 
             public static void main(String[] args) {
@@ -279,56 +298,72 @@ public class AcceleratorApplication {
         private String generatePomFile(String entityName) {
             // You can use a template engine or simple string concatenation
             // to generate the content of the pom.xml file.
-            return """
-                    <project xmlns="http://maven.apache.org/POM/4.0.0"
-                             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                             xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-                        <modelVersion>4.0.0</modelVersion>
-                        <groupId>com.example</groupId>
-                        <artifactId>%s</artifactId>
-                        <version>0.0.1-SNAPSHOT</version>
-                        <parent>
+
+            // Include Swagger dependencies by default
+            String dependenciesSection = """
+                    <dependencies>
+                        <dependency>
+                            <groupId>io.springfox</groupId>
+                            <artifactId>springfox-boot-starter</artifactId>
+                            <version>3.0.0</version>
+                        </dependency>
+                        <dependency>
+                            <groupId>io.springfox</groupId>
+                            <artifactId>springfox-swagger-ui</artifactId>
+                            <version>3.0.0</version>
+                        </dependency>             
+                        <dependency>
                             <groupId>org.springframework.boot</groupId>
-                            <artifactId>spring-boot-starter-parent</artifactId>
-                            <version>2.6.3</version>
-                        </parent>
+                            <artifactId>spring-boot-starter-data-jpa</artifactId>
+                        </dependency>
+                        <dependency>
+                            <groupId>org.springframework.boot</groupId>
+                            <artifactId>spring-boot-starter-web</artifactId>
+                        </dependency>
+                        <!-- MySQL Connector -->
+                        <dependency>
+                            <groupId>mysql</groupId>
+                            <artifactId>mysql-connector-java</artifactId>
+                            <scope>runtime</scope>
+                        </dependency>
+                        <dependency>
+                            <groupId>org.springframework.boot</groupId>
+                            <artifactId>spring-boot-starter-test</artifactId>
+                            <scope>test</scope>
+                        </dependency>
+                    </dependencies>
+                    """;
 
-                        <properties>
-                            <java.version>17</java.version>
-                        </properties>
+            return """
+            <project xmlns="http://maven.apache.org/POM/4.0.0"
+                     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                     xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+                <modelVersion>4.0.0</modelVersion>
+                <groupId>com.example</groupId>
+                <artifactId>%s</artifactId>
+                <version>0.0.1-SNAPSHOT</version>
+                <parent>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-parent</artifactId>
+                    <version>2.6.3</version>
+                </parent>
 
-                        <dependencies>
-                            <dependency>
-                                <groupId>org.springframework.boot</groupId>
-                                <artifactId>spring-boot-starter-data-jpa</artifactId>
-                            </dependency>
-                            <dependency>
-                                <groupId>org.springframework.boot</groupId>
-                                <artifactId>spring-boot-starter-web</artifactId>
-                            </dependency>
-                            <!-- MySQL Connector -->
-                                    <dependency>
-                                        <groupId>mysql</groupId>
-                                        <artifactId>mysql-connector-java</artifactId>
-                                        <scope>runtime</scope>
-                                    </dependency>
-                            <dependency>
-                                <groupId>org.springframework.boot</groupId>
-                                <artifactId>spring-boot-starter-test</artifactId>
-                                <scope>test</scope>
-                            </dependency>
-                        </dependencies>
+                <properties>
+                    <java.version>17</java.version>
+                </properties>
 
-                        <build>
-                            <plugins>
-                                <plugin>
-                                    <groupId>org.springframework.boot</groupId>
-                                    <artifactId>spring-boot-maven-plugin</artifactId>
-                                </plugin>
-                            </plugins>
-                        </build>
-                    </project>
-                    """.formatted(entityName);
+                %s <!-- Add dependencies section dynamically -->
+
+                <build>
+                    <plugins>
+                        <plugin>
+                            <groupId>org.springframework.boot</groupId>
+                            <artifactId>spring-boot-maven-plugin</artifactId>
+                        </plugin>
+                    </plugins>
+                </build>
+            </project>
+            """.formatted(entityName, dependenciesSection);
         }
 
 
@@ -462,19 +497,22 @@ public class AcceleratorApplication {
 
         private String generateProperties(String entityName) {
             return """
-            # DataSource Configuration for MySQL
-            spring.datasource.url=jdbc:mysql://localhost:3306/%s
-            spring.datasource.username=root
-            spring.datasource.password=Mankii@24
+                    # DataSource Configuration for MySQL
+                    spring.datasource.url=jdbc:mysql://localhost:3306/%s
+                    spring.datasource.username=root
+                    spring.datasource.password=Mankii@24
 
-            # Hibernate Properties
-            spring.jpa.hibernate.ddl-auto=update
-            spring.jpa.show-sql=true
-            spring.jpa.properties.hibernate.format_sql=true
+                    # Hibernate Properties
+                    spring.jpa.hibernate.ddl-auto=update
+                    spring.jpa.show-sql=true
+                    spring.jpa.properties.hibernate.format_sql=true
 
-            # Server Configuration
-            server.port=9090
-            """.formatted(entityName.toLowerCase());
+                    # Server Configuration
+                    server.port=9090
+                                
+                    #Swagger configuration
+                    spring.mvc.pathmatch.matching-strategy=ANT_PATH_MATCHER
+                    """.formatted(entityName.toLowerCase());
         }
 
         private String generateRepository(String packageName, String entityName) {
@@ -507,16 +545,21 @@ public class AcceleratorApplication {
 
             // Generate fields based on user-provided properties
             for (Property property : properties) {
+                // Check if the property name is "id" and annotate with @Id and @GeneratedValue
+                if ("id".equalsIgnoreCase(property.name())) {
+                    entityContent.append("    @Id\n");
+                    entityContent.append("    @GeneratedValue(strategy = GenerationType.IDENTITY)\n");
+                }
                 entityContent.append("    private ").append(property.dataType()).append(" ").append(property.name()).append(";\n");
             }
 
             // Generate getters and setters based on user-provided properties
             for (Property property : properties) {
-                entityContent.append("\n    public ").append(property.dataType()).append(" get").append(property.name()).append("() {\n");
+                entityContent.append("\n    public ").append(property.dataType()).append(" get").append(Character.toUpperCase(property.name().charAt(0))).append(property.name().substring(1)).append("() {\n");
                 entityContent.append("        return ").append(property.name()).append(";\n");
                 entityContent.append("    }\n\n");
 
-                entityContent.append("    public void set").append(property.name()).append("(").append(property.dataType()).append(" ").append(property.name()).append(") {\n");
+                entityContent.append("    public void set").append(Character.toUpperCase(property.name().charAt(0))).append(property.name().substring(1)).append("(").append(property.dataType()).append(" ").append(property.name()).append(") {\n");
                 entityContent.append("        this.").append(property.name()).append(" = ").append(property.name()).append(";\n");
                 entityContent.append("    }\n\n");
             }
@@ -527,7 +570,34 @@ public class AcceleratorApplication {
 
             return entityContent.toString();
         }
+        // Add this method in your EntityGenerator class
+        private static String generateSwaggerConfig(String packageName, String entityName) {
+            return """
+            package %s;
 
+            import org.springframework.context.annotation.Bean;
+            import org.springframework.context.annotation.Configuration;
+            import springfox.documentation.builders.PathSelectors;
+            import springfox.documentation.builders.RequestHandlerSelectors;
+            import springfox.documentation.spi.DocumentationType;
+            import springfox.documentation.spring.web.plugins.Docket;
+            
+
+            @Configuration
+            public class SwaggerConfig {
+                @Bean
+                public Docket api() {
+                    return new Docket(DocumentationType.SWAGGER_2)
+                        .select()
+                        .apis(RequestHandlerSelectors.any())
+                        .paths(PathSelectors.any())
+                        .build();
+                }
+            }
+            """.formatted(
+                    packageName, packageName + "." + entityName
+            );
+        }
 
         private void deleteEntityModuleDirectory(String entityName) {
             String entityModulePath = String.format(BASE_PATH, entityName);
