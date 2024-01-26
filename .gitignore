@@ -6,3 +6,5 @@
 
 # Ignore build output directories
 target/
+
+*.jar

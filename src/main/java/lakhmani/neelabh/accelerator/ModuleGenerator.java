@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import lakhmani.neelabh.accelerator.dto.Property;
 
 @Component
 public class ModuleGenerator {
@@ -114,6 +115,111 @@ public class ModuleGenerator {
 
             // Terminate the application after successfully generating the module
             System.exit(0);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.err.println("Error occurred. Deleting generated module directory.");
+            deleteDirectory(moduleDirectory);
+        }
+    }
+    public void generateModule(String entityName,List<Property> properties) {
+        // Delete the '%s-module' directory if it exists
+        deleteEntityModuleDirectory(entityName.toLowerCase());
+
+        // Create module directory
+        String modulePath = String.format(BASE_PATH, entityName.toLowerCase());
+        File moduleDirectory = Paths.get(modulePath).toFile();
+        try {
+            if (moduleDirectory.mkdirs()) {
+                System.out.println("Module directory created successfully.");
+            } else {
+                System.err.println("Failed to create module directory.");
+                return;  // Exit the method if directory creation fails
+            }
+
+            // Generate src/main/java folder and package structure
+            String packageName = "com.example." + entityName.toLowerCase();
+            String packagePath = packageName.replace(".", "/");
+            File javaSrcDir = Paths.get(modulePath, "src/main/java", packagePath).toFile();
+            if(javaSrcDir.mkdirs()){
+                System.out.println("src/main/java directory created successfully.");
+            } else {
+                System.err.println("Failed to create src/main/java directory.");
+                return;  // Exit the method if directory creation fails
+            }
+
+            // Generate entity package and class
+            String entityPackage = packageName + ".entity";
+            String entityContent = generateEntity(entityPackage, entityName,properties);
+            Path entityPath = Paths.get(javaSrcDir.toString(), "entity", entityName + ".java");
+            Util.writeFile(entityPath, entityContent);
+
+            // Generate application package and class
+            String applicationContent = generateApplicationClass(packageName, entityName);
+            Path applicationPath = Paths.get(javaSrcDir.toString(), entityName+"CRUDApp.java");
+            Util.writeFile(applicationPath, applicationContent);
+
+
+            // Generate controller package and class
+            String controllerPackage = packageName + ".controller";
+            String controllerContent = generateController(controllerPackage, entityName);
+            Path controllerPath = Paths.get(javaSrcDir.toString(), "controller", entityName + "Controller.java");
+            Util.writeFile(controllerPath, controllerContent);
+
+
+            // Generate service package and class
+            String servicePackage = packageName + ".service";
+            String serviceContent = generateService(servicePackage, entityName);
+            Path servicePath = Paths.get(javaSrcDir.toString(), "service", entityName + "Service.java");
+            Util.writeFile(servicePath, serviceContent);
+
+            // Generate repository package and class
+            String repositoryPackage = packageName + ".repository";
+            String repositoryContent = generateRepository(repositoryPackage, entityName);
+            Path repositoryPath = Paths.get(javaSrcDir.toString(), "repository", entityName + "Repository.java");
+            Util.writeFile(repositoryPath, repositoryContent);
+
+            // Generate resources folder and application.properties
+            File resourcesDir = Paths.get(modulePath, "src/main/resources").toFile();
+            if(resourcesDir.mkdirs()){
+                System.out.println("Resources directory created successfully.");
+            } else {
+                System.err.println("Failed to create resources directory.");
+                return;  // Exit the method if directory creation fails
+            }
+            String propertiesContent = generateProperties(entityName);
+            Path propertiesPath = Paths.get(resourcesDir.toString(), "application.properties");
+            Util.writeFile(propertiesPath, propertiesContent);
+
+            // Generate pom.xml template
+            String pomFileContent = generatePomFile(entityName);
+            Path pomFilePath = Paths.get(modulePath, "pom.xml");
+            Util.writeFile(pomFilePath, pomFileContent);
+
+            // Generate src/main/java/config folder
+            String configPackage = packageName + ".config";
+            Path config = Paths.get(javaSrcDir.toString(), "config");
+            String configPath = config.toString();
+            File configDir = config.toFile();
+            if (configDir.mkdirs()) {
+                System.out.println("src/main/java/config directory created successfully.");
+            } else {
+                System.err.println("Failed to create src/main/java/config directory.");
+                return;  // Exit the method if directory creation fails
+            }
+
+            // Generate SwaggerConfig class
+            String swaggerConfigContent = generateSwaggerConfig(configPackage, entityName);
+            Path swaggerConfigPath = Paths.get(configPath, "SwaggerConfig.java");
+            Util.writeFile(swaggerConfigPath, swaggerConfigContent);
+
+
+            // Zip the directory
+            Util.zipDirectory(moduleDirectory, modulePath + ".zip");
+
+
+            // Terminate the application after successfully generating the module
+           // System.exit(0);
 
         } catch (Exception e) {
             e.printStackTrace();

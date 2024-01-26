@@ -6,6 +6,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 import java.util.Set;
+import lakhmani.neelabh.accelerator.dto.Property;
+
 
 @Component
 public class CommandLineProperties {
