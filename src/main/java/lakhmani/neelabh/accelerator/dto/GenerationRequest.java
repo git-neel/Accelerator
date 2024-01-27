@@ -1,7 +1,7 @@
 package lakhmani.neelabh.accelerator.dto;
 import java.util.List;
 
-public class GenerationRequest {
+public class    GenerationRequest {
     private String entityName;
     private List<Property> properties;
 

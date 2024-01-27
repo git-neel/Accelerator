@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Module Generator</title>
+</head>
+<body>
+<form id="moduleForm">
+    <label for="entityName">Entity Name:</label>
+    <input type="text" id="entityName" name="entityName" required><br><br>
+
+    <label for="numOfProperties">Number of Properties:</label>
+    <input type="number" id="numOfProperties" name="numOfProperties" min="1" required>
+    <button type="button" id="addPropertiesBtn">Add Properties</button><br><br>
+
+    <div id="propertyFields"></div>
+
+    <button type="button" id="generateDownloadBtn">Generate and Download Module</button>
+</form>
+
+<script>
+    document.getElementById('addPropertiesBtn').addEventListener('click', function() {
+        const numOfProperties = parseInt(document.getElementById('numOfProperties').value);
+        const propertyFieldsContainer = document.getElementById('propertyFields');
+        propertyFieldsContainer.innerHTML = ''; // Clear existing fields
+
+        for (let i = 1; i <= numOfProperties; i++) {
+            const propertyFieldset = document.createElement('fieldset');
+            propertyFieldset.innerHTML = `
+                    <legend>Property ${i}</legend>
+                    <label for="propertyName${i}">Name:</label>
+                    <input type="text" id="propertyName${i}" name="propertyName${i}" required><br>
+                    <label for="propertyType${i}">Data Type:</label>
+                    <select id="propertyType${i}" name="propertyType${i}" required>
+                        <option value="Long">Long</option>
+                        <option value="Double">Double</option>
+                        <option value="String">String</option>
+                        <option value="Integer">Integer</option>
+                        <option value="Boolean">Boolean</option>
+                        <option value="Float">Float</option>
+                        <!-- Add more options as needed -->
+                    </select><br><br>
+                `;
+            propertyFieldsContainer.appendChild(propertyFieldset);
+        }
+    });
+    document.getElementById('generateDownloadBtn').addEventListener('click', function() {
+        // Fetch entity name and properties from the form
+        const entityName = document.getElementById('entityName').value;
+        const numOfProperties = parseInt(document.getElementById('numOfProperties').value);
+        const properties = [];
+        for (let i = 1; i <= numOfProperties; i++) {
+            const propertyName = document.getElementById(`propertyName${i}`).value;
+            const propertyType = document.getElementById(`propertyType${i}`).value;
+            properties.push({ name: propertyName, dataType: propertyType });
+        }
+
+        // Create a request object
+        const request = {
+            entityName: entityName,
+            properties: properties
+        };
+
+        // Send an AJAX POST request to the server
+        fetch('/download-module', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(request)
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to download module');
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                // Create a URL for the blob data
+                const url = window.URL.createObjectURL(blob);
+
+                // Create a link element and trigger the download
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'module.zip';
+                document.body.appendChild(a);
+                a.click();
+
+                // Clean up
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to download module. Please try again.');
+            });
+    });
+
+</script>
+</body>
+</html>
